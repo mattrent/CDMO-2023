@@ -8,79 +8,83 @@ array [WIDTH,HEIGHT] of int: grid;
 
 
 enum Cell = {Empty, Wall};
-array [WIDTH, HEIGHT] of var Cell: walls_grid; % computed grid of 0 (free cells) and 1 (walls)
+% encode each Wall point as R * (wx - 1) + wy (i.e. R is the "base" of this encoding)
+array [1..C*R] of var Cell: walls;
 
 % TODO: convert grid to single one-dimensional array
 
 % TODO: define a predicate for "walled cell" given coordinates and grid
-var int: NWALLS = card({(R+1) * wx + wy | wx in WIDTH, wy in HEIGHT where walls_grid[wx, wy] == Wall});
-% var int: NWALLED = sum([1 | x in WIDTH, y in HEIGHT where 
-%                                   sum([1 | wx in WIDTH, wy in HEIGHT where 
-%                                           wx == x 
-%                                           /\ wy > y 
-%                                           /\ walls_grid[wx, wy] == Wall]) mod 2 == 1
-%                          ]);
+var int: NWALLS = card({j | j in 1..C*R where walls[j] == Wall});
+var int: NWALLED = sum([1 | x in WIDTH, y in HEIGHT where 
+                                  walled(x,y)
+                         ]);
     
+% the amount of walls on the same horizontal/vertical coordinate and with a higher vertical/horizontal coordinate (i.e. the walls "encountered" by the ray starting on the point)
+predicate walled(int: x, int: y) = 
+      card({wy | wy in HEIGHT where wy > y /\ walls[R * (x - 1) + wy] == Wall}) mod 2 == 1 /\
+      card({wx | wx in WIDTH where wx > x /\ walls[R * (wx - 1) + y] == Wall}) mod 2 == 1;
 
 % each of the D points must be surrounded by V non-walled points, with V being the number in the point of interest
-% TODO: this might not be working
 constraint
   forall (x in WIDTH, y in HEIGHT where grid[x,y] != 0) (
-    forall (wx in WIDTH, wy in HEIGHT where walls_grid[wx, wy] == Wall) (
-      abs(wx - x) + abs(wy - y) > grid[x,y]
+    forall (j in 1..C*R) (
+      let {
+        var int: wx = (j div R) + 1;
+        var int: wy = if j mod R != 0 then j mod R else R endif;
+      } in
+      (abs(wx - x) + abs(wy - y) <= grid[x,y]) ->
+      walls[j] == Empty
     )
   );
 
 
 constraint
-%TODO: just check the first valid index where a Wall is found in the 1-dimensional array
-    let {
-       % encode each Wall point as (R + 1) * wx + wy (i.e. R+1 is the "base" of this encoding)
-       array[1..C*R] of var int: walls_array = [
-         if walls_grid[wx, wy] == Wall then (R + 1) * wx + wy 
-         else -1 endif
-        | wx in WIDTH, wy in HEIGHT
-       ];
-    } in
 %     decreasing(walls_array) /\
-    forall (i in 1..C*R where walls_array[i] != -1) (
+    forall (i in 1..C*R where walls[i] == Wall) (
         let {
-          var int: wx = walls_array[i] div (R + 1);
-          var int: wy = walls_array[i] mod (R + 1);
-
          % succ is the first index larger than i with where there is a Wall
-          var set of int: successors = {j | j in 1..C*R where j > i /\ walls_array[j] != -1};
+          var set of int: successors = {j | j in 1..C*R where j > i /\ walls[j] == Wall};
           
           var int: succ = if i <= C*R /\ card(successors) > 0 then
                            min(successors)
-                         else 1 endif;
+                         else 
+                           min({j | j in 1..C*R where walls[j] == Wall})
+                         endif;
+                         
+          var int: wx = (i div R) + 1;
+          var int: wy = if i mod R != 0 then i mod R else R endif;
+          
+          var int: sx = (succ div R) + 1;
+          var int: sy = if succ mod R != 0 then succ mod R else R endif
         } in
-      
-        walls_array[succ] == (R + 1) * (wx) + (wy - 1) \/
-        walls_array[succ] == (R + 1) * (wx) + (wy + 1) \/
         
-        walls_array[succ] == (R + 1) * (wx - 1) + (wy - 1) \/
-        walls_array[succ] == (R + 1) * (wx - 1) + (wy)     \/
-        walls_array[succ] == (R + 1) * (wx - 1) + (wy + 1) \/
+%         succ == R * (wx - 1) + (wy + 1) \/
+%         succ == R * (wx - 1) + (wy - 1) \/
         
-        walls_array[succ] == (R + 1) * (wx + 1) + (wy - 1) \/
-        walls_array[succ] == (R + 1) * (wx + 1) + (wy)     \/
-        walls_array[succ] == (R + 1) * (wx + 1) + (wy + 1)          
+%         succ == R * (wx - 2) + (wy - 1) \/
+%         succ == R * (wx - 2) + (wy)     \/
+%         succ == R * (wx - 2) + (wy + 1) \/
+        
+%         succ == R * (wx) + (wy - 1) \/
+%         succ == R * (wx) + (wy)     \/
+%         succ == R * (wx) + (wy + 1)          
+          abs(wx - sx) <= 1 /\
+          abs(wy - sy) <= 1 /\
+          not (wx == sx /\ wy == sy)
     );
 
 
 % each of the D points must be delimited (i.e., an odd number of walls are on the same horizontal coordinate)
 constraint
   forall(x in WIDTH, y in HEIGHT where grid[x,y] != 0) (
-      % the amount of walls on the same horizontal coordinate and with a higher vertical coordinate (i.e. the walls "encountered" by the ray starting on the point)
-      card({wy | wy in HEIGHT where wy > y /\ walls_grid[x, wy] == Wall}) mod 2 == 1
+      walled(x,y)
   );
 
 
-% NWALLED has priority; we weigh it the maximum possible value of NWALLS to ensure this
-% solve minimize R*C*NWALLED + NWALLS;
-solve satisfy;
+% NWALLED has priority; we weigh it with the maximum possible value of NWALLS to ensure this
+solve minimize R*C*NWALLED + NWALLS;
+% solve satisfy;
 
 output ["\(NWALLS)\n"] ++
-       ["\(wx) \(wy)\n" | wx in WIDTH, wy in HEIGHT where fix(walls_grid[wx, wy]) == Wall]
+       ["\(wx) \(wy)\n" | wx in WIDTH, wy in HEIGHT where fix(walls[R * (wx - 1) + wy]) == Wall]
  
