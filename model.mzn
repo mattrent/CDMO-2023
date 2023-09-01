@@ -11,9 +11,6 @@ enum Cell = {Empty, Wall};
 % encode each Wall point as R * (wx - 1) + wy (i.e. R is the "base" of this encoding)
 array [1..C*R] of var Cell: walls;
 
-% TODO: convert grid to single one-dimensional array
-
-% TODO: define a predicate for "walled cell" given coordinates and grid
 var int: NWALLS = card({j | j in 1..C*R where walls[j] == Wall});
 var int: NWALLED = sum([1 | x in WIDTH, y in HEIGHT where 
                                   walled(x,y)
@@ -27,47 +24,42 @@ predicate walled(int: x, int: y) =
 % each of the D points must be surrounded by V non-walled points, with V being the number in the point of interest
 constraint
   forall (x in WIDTH, y in HEIGHT where grid[x,y] != 0) (
-    forall (j in 1..C*R) (
+    forall (j in 1..C*R where       
       let {
         var int: wx = (j div R) + 1;
         var int: wy = if j mod R != 0 then j mod R else R endif;
       } in
-      (abs(wx - x) + abs(wy - y) <= grid[x,y]) ->
+      (abs(wx - x) + abs(wy - y) <= grid[x,y])
+    ) (
       walls[j] == Empty
     )
   );
 
 
 constraint
-%     decreasing(walls_array) /\
-    forall (i in 1..C*R where walls[i] == Wall) (
-        let {
-         % succ is the first index larger than i with where there is a Wall
-          var set of int: successors = {j | j in 1..C*R where j > i /\ walls[j] == Wall};
-          
-          var int: succ = if i <= C*R /\ card(successors) > 0 then
-                           min(successors)
+    let {
+      % tuples of (i, successor), where the successor is the first index larger than i where the cell is a Wall
+      % TODO: optimize! the successors should only be computed __ONCE__
+      array[int] of var tuple(int, int): successors = [(i, succ) | 
+        i in 1..C*R where walls[i] == Wall,
+        s_set = {j | j in 1..C*R where j > i /\ walls[j] == Wall},
+        succ = if i <= C*R /\ card(s_set) > 0 then
+                           min(s_set)
                          else 
                            min({j | j in 1..C*R where walls[j] == Wall})
-                         endif;
+                         endif
+        ];
+    } in 
+    forall (t in successors) (
+        let {
                          
-          var int: wx = (i div R) + 1;
-          var int: wy = if i mod R != 0 then i mod R else R endif;
+          var int: wx = (t.1 div R) + 1;
+          var int: wy = if t.1 mod R != 0 then t.1 mod R else R endif;
           
-          var int: sx = (succ div R) + 1;
-          var int: sy = if succ mod R != 0 then succ mod R else R endif
+          var int: sx = (t.2 div R) + 1;
+          var int: sy = if t.2 mod R != 0 then t.2 mod R else R endif
         } in
         
-%         succ == R * (wx - 1) + (wy + 1) \/
-%         succ == R * (wx - 1) + (wy - 1) \/
-        
-%         succ == R * (wx - 2) + (wy - 1) \/
-%         succ == R * (wx - 2) + (wy)     \/
-%         succ == R * (wx - 2) + (wy + 1) \/
-        
-%         succ == R * (wx) + (wy - 1) \/
-%         succ == R * (wx) + (wy)     \/
-%         succ == R * (wx) + (wy + 1)          
           abs(wx - sx) <= 1 /\
           abs(wy - sy) <= 1 /\
           not (wx == sx /\ wy == sy)
@@ -83,7 +75,6 @@ constraint
 
 % NWALLED has priority; we weigh it with the maximum possible value of NWALLS to ensure this
 solve minimize R*C*NWALLED + NWALLS;
-% solve satisfy;
 
 output ["\(NWALLS)\n"] ++
        ["\(wx) \(wy)\n" | wx in WIDTH, wy in HEIGHT where fix(walls[R * (wx - 1) + wy]) == Wall]

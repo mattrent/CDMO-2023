@@ -1,0 +1,14 @@
+{
+    "openFiles": [
+        "model.mzn",
+        "instance.1.dzn"
+    ],
+    "openTab": 1,
+    "projectFiles": [
+        "instance.1.dzn",
+        "model.mzn"
+    ],
+    "selectedBuiltinConfigId": "org.gecode.gecode",
+    "selectedBuiltinConfigVersion": "6.3.0",
+    "version": 106
+}
