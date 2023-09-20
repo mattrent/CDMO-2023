@@ -36,7 +36,7 @@ predicate reach(var int: start, var set of int: end, int: length, var set of int
     endif
   endif;
 
-%TODO: we want all nodes to be reachable from "selected"
+% every node must reach a node in the "selected" set in every possible path
 constraint
   forall(i in 1..length(town1))(
       reach(i, {j | j in 1..length(town1) where selected[j] == 1}, townsintravel1[1] - 1, {}, connections)
